@@ -1,0 +1,47 @@
+{
+  "high_end": {
+    "india": [
+      "malabar hill", "altamount road", "carmichael road", "breach candy",
+      "cuffe parade", "colaba", "walkeshwar", "nepean sea road",
+      "juhu", "bandra west", "pali hill", "bandstand",
+      "worli sea face", "lower parel", "bkc", "bandra kurla complex",
+      "lutyens", "golf links", "jor bagh", "sunder nagar", "shanti niketan",
+      "vasant vihar", "defence colony", "greater kailash",
+      "koregaon park", "boat club", "kalyani nagar", "viman nagar",
+      "indiranagar", "ulsoor", "lavelle road", "vittal mallya",
+      "richmond road", "mg road", "brigade road",
+      "park street", "camac street", "ballygunge", "alipore",
+      "golf course road", "dlf phase", "sohna road", "sector 47",
+      "sector 50", "sector 56", "sector 57", "nirvana country",
+      "jubilee hills", "banjara hills", "film nagar", "gachibowli",
+      "anna nagar west", "nungambakkam", "adyar", "mylapore", "besant nagar",
+      "law garden", "bodakdev", "vastrapur", "prl colony",
+      "hazratganj", "gomti nagar", "vibhav khand",
+      "panaji", "dona paula", "miramar",
+      "civil lines", "cantonment", "saddar",
+      "new town", "salt lake", "rajarhat"
+    ],
+    "international": [
+      "beverly hills", "manhattan", "upper east side", "fifth avenue",
+      "mayfair", "knightsbridge", "chelsea", "kensington",
+      "dubai marina", "palm jumeirah", "downtown dubai", "jumeirah",
+      "orchard road", "raffles place", "marina bay",
+      "cbd", "central business district"
+    ]
+  },
+  "mid_tier": {
+    "india": [
+      "andheri west", "andheri east", "goregaon", "malad west",
+      "powai", "mulund", "ghatkopar", "chembur",
+      "santacruz west", "vileparle", "borivali west",
+      "dwarka", "janakpuri", "rohini", "preet vihar",
+      "kothrud", "pune", "aundh", "baner", "wakad",
+      "koramangala", "electronic city", "whitefield", "hsr layout",
+      "t nagar", "vadapalani", "porur", "perungudi", "sholinganallur",
+      "satellite", "ashram road", "navrangpura",
+      "gomti nagar", "indira nagar", "aliganj",
+      "sikar road", "vaishali nagar",
+      "sector 14", "sector 15", "sector 18"
+    ]
+  }
+}
