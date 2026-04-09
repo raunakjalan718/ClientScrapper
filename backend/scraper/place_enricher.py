@@ -81,9 +81,21 @@ def _parse_place_results(place: Dict[str, Any]) -> Dict[str, Any]:
     # Parse booking link
     booking_link = place.get("booking_link")
     if not booking_link:
-        # Check links object
         links = place.get("links", {})
         booking_link = links.get("book_a_table") or links.get("order_online")
+
+    # Extract all place links (Practo, profiles, etc.)
+    place_links = {}
+    raw_links = place.get("links", {}) or {}
+    if isinstance(raw_links, dict):
+        for key, val in raw_links.items():
+            if val and isinstance(val, str) and val.startswith("http"):
+                place_links[key] = val
+    # Also check extensions for embedded URLs
+    for ext_block in place.get("extensions", []):
+        for key in ("menu", "order", "reserve"):
+            if key in ext_block and isinstance(ext_block[key], str):
+                place_links[key] = ext_block[key]
 
     return {
         "highlights": highlights,
@@ -98,4 +110,6 @@ def _parse_place_results(place: Dict[str, Any]) -> Dict[str, Any]:
         "phone_enriched": place.get("phone"),
         "website_enriched": place.get("website"),
         "description_enriched": place.get("description"),
+        "place_links": place_links,
     }
+

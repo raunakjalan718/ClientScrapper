@@ -4,6 +4,11 @@ import uuid
 import os
 import httpx
 from typing import AsyncGenerator
+from dotenv import load_dotenv
+
+# Load .env FIRST — before any sub-module imports read os.getenv()
+load_dotenv()
+
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +17,8 @@ from fastapi.responses import StreamingResponse
 from scraper.maps_scraper import discover_leads
 from scraper.place_enricher import enrich_place
 from scraper.website_auditor import audit_website
+from scraper.web_searcher import search_web_for_lead
+from scraper.gemini_enricher import gemini_enrich, gemini_enabled
 from scoring.lead_scorer import calculate_lead_score
 from models import SearchRequest
 
@@ -103,6 +110,36 @@ async def run_pipeline(
             phone = enrichment.get("phone_enriched") or raw.get("phone")
             description = enrichment.get("description_enriched") or raw.get("description")
 
+            # ── Phase 2.5: Gemini Web Intelligence ──────────────────────
+            gemini_data = {}
+            gemini_profiles = []
+            if gemini_enabled():
+                yield _sse("gemini", {
+                    "message": f"🤖 Gemini AI scanning web ({idx}/{total_found}): {name}",
+                    "lead_name": name,
+                    "current": idx,
+                    "total": total_found,
+                    "progress": progress,
+                })
+                try:
+                    web_results = await search_web_for_lead(
+                        http_client, name, specialty, location
+                    )
+                    gemini_data = await gemini_enrich(
+                        name=name,
+                        specialty=specialty,
+                        location=location,
+                        address=raw.get("address", ""),
+                        search_results=web_results,
+                    )
+                    gemini_profiles = gemini_data.get("profile_urls", [])
+
+                    # Prefer Gemini-discovered personal website over Maps listing
+                    if gemini_data.get("personal_website"):
+                        website_url = gemini_data["personal_website"]
+                except Exception as e:
+                    pass  # Gemini failure is non-fatal
+
             yield _sse("auditing", {
                 "message": f"🌐 Auditing website ({idx}/{total_found}): {name}",
                 "lead_name": name,
@@ -111,7 +148,7 @@ async def run_pipeline(
                 "progress": progress,
             })
 
-            # Phase 3: Website audit
+            # Phase 3: Website audit (uses best URL discovered above)
             website_audit = await audit_website(website_url)
 
             # Phase 4: Lead scoring
@@ -139,9 +176,27 @@ async def run_pipeline(
                 "top_reviews": enrichment.get("top_reviews", [])[:3],
                 "thumbnail": raw.get("thumbnail"),
                 "place_id": raw.get("place_id"),
+                # Contact intelligence — merge all email sources
+                "emails": list(dict.fromkeys(
+                    website_audit.get("emails", []) +
+                    gemini_data.get("emails", [])
+                ))[:6],
+                # All found links
+                "social_links": website_audit.get("social_links", {}),
+                "directory_links": website_audit.get("directory_links", {}),
+                "place_links": enrichment.get("place_links", {}),
+                # Gemini AI enrichment
+                "gemini_profiles": gemini_profiles,
+                "hospital_affiliations": gemini_data.get("hospital_affiliations", []),
+                "web_presence_summary": gemini_data.get("web_presence_summary", ""),
+                "gemini_has_real_website": gemini_data.get("has_real_website", False),
+                "ai_enriched": bool(gemini_data),
+                # Website audit
                 "website": website_audit,
+                # Scoring
                 "scoring": scoring,
             }
+
 
             leads_collected.append(lead_card)
 
@@ -203,33 +258,50 @@ async def export_leads(
         output = io.StringIO()
         if leads:
             fieldnames = [
-                "name", "types", "address", "phone", "rating", "review_count",
-                "price_level", "website_url", "website_quality", "website_score",
-                "has_booking", "highlights", "area_tier",
+                "name", "types", "address", "phone", "emails",
+                "rating", "review_count", "price_level",
+                "website_url", "website_quality", "website_score",
+                "social_facebook", "social_instagram", "social_linkedin",
+                "social_twitter", "social_youtube", "social_whatsapp",
+                "practo_profile", "justdial_profile",
+                "has_booking", "booking_link", "highlights", "area_tier",
                 "lead_intelligence_score", "tag", "description",
             ]
             writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
 
             for lead in leads:
+                soc = lead.get("social_links") or {}
+                dirs = lead.get("directory_links") or {}
                 writer.writerow({
                     "name": lead.get("name"),
                     "types": ", ".join(lead.get("types", [])),
                     "address": lead.get("address"),
                     "phone": lead.get("phone"),
+                    "emails": ", ".join(lead.get("emails", [])),
                     "rating": lead.get("rating"),
                     "review_count": lead.get("review_count"),
                     "price_level": lead.get("price_level"),
                     "website_url": lead.get("website", {}).get("url"),
                     "website_quality": lead.get("website", {}).get("quality_grade"),
                     "website_score": lead.get("website", {}).get("quality_score"),
+                    "social_facebook": soc.get("facebook", ""),
+                    "social_instagram": soc.get("instagram", ""),
+                    "social_linkedin": soc.get("linkedin", ""),
+                    "social_twitter": soc.get("twitter", soc.get("x", "")),
+                    "social_youtube": soc.get("youtube", ""),
+                    "social_whatsapp": soc.get("whatsapp", ""),
+                    "practo_profile": dirs.get("practo", ""),
+                    "justdial_profile": dirs.get("justdial", ""),
                     "has_booking": bool(lead.get("booking_link")),
+                    "booking_link": lead.get("booking_link", ""),
                     "highlights": ", ".join(lead.get("highlights", [])),
                     "area_tier": lead.get("scoring", {}).get("area_tier"),
                     "lead_intelligence_score": lead.get("scoring", {}).get("lead_intelligence_score"),
                     "tag": lead.get("scoring", {}).get("tag"),
                     "description": lead.get("description"),
                 })
+
 
         return StreamingResponse(
             iter([output.getvalue()]),
@@ -246,3 +318,12 @@ async def export_leads(
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "MedScrape API"}
+
+
+@app.get("/config")
+async def config():
+    """Returns feature flags — used by frontend to show/hide AI features."""
+    return {
+        "gemini_enabled": gemini_enabled(),
+        "version": "1.1.0",
+    }

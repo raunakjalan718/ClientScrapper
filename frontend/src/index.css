@@ -502,13 +502,14 @@ body::before {
 /* ─── Results Table ─────────────────────────────────────────── */
 .results-table-wrap {
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--border);
   margin-bottom: 40px;
 }
 
 .results-table {
   width: 100%;
+  min-width: 1100px;
   border-collapse: collapse;
   background: var(--bg-card);
   backdrop-filter: blur(20px);
